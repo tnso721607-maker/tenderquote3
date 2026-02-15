@@ -1,0 +1,60 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install dependencies
+        run: |
+          npm init -y
+          npm install react react-dom lucide-react @google/genai esbuild
+      - name: Build Application
+        env:
+          API_KEY: ${{ secrets.API_KEY }}
+        run: |
+          mkdir dist
+          npx esbuild index.tsx \
+            --bundle \
+            --minify \
+            --sourcemap \
+            --format=esm \
+            --jsx=automatic \
+            --outfile=dist/index.js \
+            --define:process.env.API_KEY=\"$API_KEY\"
+          cp index.html dist/index.html
+          [ -f metadata.json ] && cp metadata.json dist/metadata.json || true
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: './dist'
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
